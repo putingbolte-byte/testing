@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DANZZ ID CHECKER</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#eee;font-family:Arial,sans-serif}
+.wrap{max-width:1150px;margin:auto;padding:20px 15px 60px}.hero{text-align:center;padding:28px 5px}
+h1{margin:0;color:#39ff88;text-shadow:0 0 8px #39ff88,0 0 28px #0a5;font-size:clamp(30px,7vw,58px)}
+.hero p{color:#999}.card{background:#0d0d0d;border:1px solid #252525;border-radius:18px;padding:20px;margin:15px 0;box-shadow:0 0 25px #000}
+h2{color:#39ff88;margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}
+label{display:block;color:#bbb;font-weight:bold;margin-bottom:7px}input,select{width:100%;padding:13px;background:#080808;color:#fff;border:1px solid #333;border-radius:10px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}.check{display:flex;align-items:center;gap:8px}.check input{width:auto}
+button{padding:12px 17px;border:0;border-radius:10px;background:#20d86b;color:#001b0b;font-weight:800;cursor:pointer;margin:4px}
+button.secondary{background:#151515;color:#39ff88;border:1px solid #285f40}.muted{color:#888;font-size:13px}
+.log,pre{white-space:pre-wrap;background:#050505;border:1px solid #222;border-radius:12px;padding:14px;overflow:auto}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #222}th{color:#39ff88}
+.fileitem{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding:10px 0;gap:10px}
+.stat b{color:#39ff88}.warn{color:#ffc857}.feature{background:#080808;border:1px solid #1f3d2c;border-radius:14px;padding:14px;box-shadow:0 0 14px rgba(32,216,107,.05)}.feature h3{margin:0 0 6px;color:#39ff88}.feature p{margin:0;color:#aaa;font-size:13px;line-height:1.5}.api-ok{color:#39ff88;text-shadow:0 0 8px #39ff88}.api-off{color:#ff6464}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="hero"><h1>WELCOME TO WEBSITE<br>DANZZ ID CHECKER</h1><p>Distribution & Flexible Device ID Splitter</p><div id="apiStatus" class="muted" style="margin-top:10px">● Connecting to feature API...</div></div>
+
+<div class="card" id="featureCard" style="display:none"><h2>⚡ WEBSITE FEATURES</h2><div id="featureList" class="grid"></div></div>
+
+<div class="card">
+<div class="grid">
+<div><label>Upload TXT</label><input id="file" type="file" accept=".txt"></div>
+<div><label>Mode Split</label><select id="mode"><option value="full">FULL INFO / ORIGINAL LINE</option><option value="id">DEVICE ID ONLY</option></select></div>
+<div><label>Jumlah ID / record per file</label><input id="size" type="number" min="1" max="100000" value="100"></div>
+</div>
+<div class="row"><label class="check"><input id="shuffle" type="checkbox" checked> Acak / mix sebelum split</label></div>
+<div class="row"><button id="split">✂️ SPLIT FILE</button><button id="zip" class="secondary" disabled>📦 DOWNLOAD ZIP</button><button class="secondary" onclick="location.reload()">RESET</button></div>
+</div>
+
+<div class="card"><div class="stat">Total record/ID: <b id="total">0</b> | Total file: <b id="parts">0</b></div><div id="log" class="log">Upload TXT untuk mulai.</div></div>
+
+<div class="card"><h2>📊 SKIN DISTRIBUTION</h2><div id="dist" class="muted">Hanya tersedia jika input berisi Skin Count.</div></div>
+<div class="card"><h2>📈 SKIN COUNT SUMMARY</h2><div id="summary" class="log">Belum ada data.</div></div>
+<div class="card"><h2>🔢 SKIN COUNTS (LOWEST → HIGHEST)</h2><pre id="sorted">Belum ada data.</pre></div>
+<div class="card"><h2>🏆 COLLECTOR TIERS</h2><pre id="tiers">Belum ada data.</pre></div>
+
+<div class="card"><h2>📋 DISTRIBUTION TXT</h2><div class="row"><button class="secondary" id="copy">📋 COPY TXT</button><button class="secondary" id="select">SELECT ALL</button></div><pre id="txt">Belum ada data.</pre></div>
+
+<div class="card"><h2>📦 HASIL SPLIT</h2><div id="results" class="muted">Belum ada hasil.</div></div>
+</div>
+
+<script>
+const SUPABASE_URL="https://rdgtbyayaudumzpxfcax.supabase.co/rest/v1/";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_OZOiy7jXy1pcgA-fZfW1SQ_3eRoQaQv";
+let sb=null;
+let items=[], outputs=[], distText='';
+
+function supabaseConfigured(){return SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('PASTE_')&&!SUPABASE_PUBLISHABLE_KEY.includes('PASTE_')}
+function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
+function setFeatureUI(name,enabled){
+ const n=name.toLowerCase();
+ if(n.includes('shuffle')||n.includes('acak')) document.getElementById('shuffle').closest('.row').style.display=enabled?'flex':'none';
+ if(n.includes('zip')) document.getElementById('zip').style.display=enabled?'inline-block':'none';
+ if(n.includes('skin')&&n.includes('distribution')) { document.getElementById('dist').closest('.card').style.display=enabled?'block':'none'; }
+ if(n.includes('summary')) document.getElementById('summary').closest('.card').style.display=enabled?'block':'none';
+}
+async function loadWebsiteFeatures(){
+ const status=document.getElementById('apiStatus');
+ if(!supabaseConfigured()){status.textContent='● Feature API belum dikonfigurasi';status.className='muted api-off';return;}
+ try{
+   sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+   const {data,error}=await sb.from('website_features').select('id,name,description,icon,enabled,sort_order').eq('enabled',true).order('sort_order',{ascending:true}).order('created_at',{ascending:true});
+   if(error) throw error;
+   status.textContent='● API LIVE • Features synced';status.className='muted api-ok';
+   const card=document.getElementById('featureCard'), list=document.getElementById('featureList');
+   list.innerHTML='';
+   if(data?.length){card.style.display='block';data.forEach(f=>{const el=document.createElement('div');el.className='feature';el.innerHTML='<h3>'+escapeHtml((f.icon||'⚡')+' '+(f.name||'Feature'))+'</h3><p>'+escapeHtml(f.description||'Feature aktif di website.')+'</p>';list.appendChild(el);setFeatureUI(f.name||'',true);});}
+ }catch(e){status.textContent='● API ERROR • '+(e.message||'cek RLS/table');status.className='muted api-off';}
+}
+
+
+function normalize(s){return s.replace(/^\uFEFF/,'').replace(/\r/g,'')}
+function isDeviceId(s){return /^and_[A-Za-z0-9-]+$/i.test(s.trim())}
+function extractId(line){
+  let s=line.trim();
+  // Format: and_xxx | Result: ...
+  if(s.includes('|')){
+    let first=s.split('|')[0].trim();
+    if(isDeviceId(first)) return first;
+  }
+  // Format: Device id: <id> OR Device id: newline <id>
+  let m=s.match(/^Device\s*id\s*:\s*(?:\n\s*)?(and_[A-Za-z0-9-]+)/i);
+  if(m)return m[1];
+  // Plain ID line
+  if(isDeviceId(s))return s;
+  return '';
+}
+
+function parseInput(text){
+  text=normalize(text);
+  const lines=text.split('\n');
+  const starts=[];
+  for(let i=0;i<lines.length;i++) if(lines[i].trim().toUpperCase()==='VALID HIT') starts.push(i);
+
+  // Full records with VALID HIT
+  if(starts.length){
+    const out=[];
+    for(let i=0;i<starts.length;i++){
+      const a=starts[i],b=i+1<starts.length?starts[i+1]:lines.length;
+      const raw=lines.slice(a,b).join('\n').trim();
+      const id=extractId(raw) || ((raw.match(/Device\s*id\s*:\s*\n?\s*(and_[A-Za-z0-9-]+)/i)||[])[1]||'');
+      out.push({raw:raw+'\n',id:id,skin:getSkin(raw),tier:getTier(raw)});
+    }
+    return out.filter(x=>x.id);
+  }
+
+  // Plain / one-line Device ID or ID + metadata.
+  // Each non-empty line is one item; preserves original line for FULL mode.
+  return lines.map(x=>x.trim()).filter(Boolean).map(line=>({
+    raw:line+'\n',id:extractId(line),skin:null,tier:null
+  })).filter(x=>x.id);
+}
+
+function getSkin(raw){
+  let m=raw.match(/(?:^|\n)\s*Skin\s*Count\s*:\s*([0-9]+)/i);
+  return m?Number(m[1]):null;
+}
+function getTier(raw){
+  let m=raw.match(/(?:^|\n)\s*Collector\s*Tier\s*:\s*([^\n]+)/i);
+  return m?m[1].trim():'Unknown';
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
+function download(name,data){
+ const b=new Blob([data],{type:'text/plain;charset=utf-8'}),a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function buildDistribution(){
+ const have=items.filter(x=>x.skin!==null);
+ if(!have.length){
+   document.getElementById('dist').innerHTML='<span class="warn">N/A — input ini tidak mempunyai Skin Count. Fitur split tetap bisa digunakan.</span>';
+   document.getElementById('summary').textContent='Skin Count tidak tersedia pada input.';
+   document.getElementById('sorted').textContent='N/A';
+   document.getElementById('tiers').textContent='N/A';
+   document.getElementById('txt').textContent='=== SKIN DISTRIBUTION ===\nN/A — Skin Count tidak tersedia.';
+   distText=document.getElementById('txt').textContent; return;
+ }
+ const v=have.map(x=>x.skin),total=v.length,sum=v.reduce((a,b)=>a+b,0);
+ const ranges=[['0',0,0],['1–99',1,99],['100–199',100,199],['200–249',200,249],['250–299',250,299],['300–349',300,349],['350–399',350,399],['400–449',400,449],['450–499',450,499],['500–549',500,549],['550–599',550,599],['600–649',600,649],['650+',650,Infinity]];
+ let rows=[['Range','Count','Percentage']];
+ for(const r of ranges){let n=v.filter(x=>x>=r[1]&&x<=r[2]).length;rows.push([r[0],n,(n/total*100).toFixed(2)+'%'])}
+ document.getElementById('dist').innerHTML='<table><tr><th>Range</th><th>Count</th><th>Percentage</th></tr>'+rows.slice(1).map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td></tr>').join('')+'</table>';
+ const srt=v.slice().sort((a,b)=>a-b),unique=[...new Set(srt)];
+ let sumtxt='Lowest Skin Count : '+srt[0]+'\nHighest Skin Count: '+srt.at(-1)+'\nTotal Skin Count  : '+sum.toLocaleString('id-ID')+'\nAverage Skin Count: '+(sum/total).toFixed(2)+'\nUnique Skin Counts: '+unique.length+'\nSkin >= 300      : '+v.filter(x=>x>=300).length+'\nSkin >= 400      : '+v.filter(x=>x>=400).length+'\nSkin >= 500      : '+v.filter(x=>x>=500).length;
+ document.getElementById('summary').textContent=sumtxt;document.getElementById('sorted').textContent=srt.join('\n');
+ let map={};have.forEach(x=>map[x.tier]=(map[x.tier]||0)+1);
+ let ts=Object.entries(map).sort((a,b)=>b[1]-a[1]);document.getElementById('tiers').textContent=ts.map(x=>x[0]+' : '+x[1]).join('\n');
+ distText='=== SKIN DISTRIBUTION ===\nRange\tCount\tPercentage\n'+rows.slice(1).map(r=>r.join('\t')).join('\n')+'\n\n=== SKIN COUNT SUMMARY ===\n'+sumtxt+'\n\n=== SKIN COUNTS (LOWEST -> HIGHEST) ===\n'+srt.join('\n')+'\n\n=== COLLECTOR TIERS ===\n'+ts.map(x=>x[0]+' : '+x[1]).join('\n');
+ document.getElementById('txt').textContent=distText;
+}
+function render(){
+ const box=document.getElementById('results');box.innerHTML='';
+ outputs.forEach(o=>{let d=document.createElement('div');d.className='fileitem';
+ d.innerHTML='<span><b>'+o.name+'</b><br><span class="muted">'+o.count+' record/ID</span></span>';
+ let b=document.createElement('button');b.textContent='DOWNLOAD';b.onclick=()=>download(o.name,o.data);d.appendChild(b);box.appendChild(d)});
+}
+document.getElementById('file').onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ items=parseInput(await f.text());outputs=[];render();
+ document.getElementById('total').textContent=items.length.toLocaleString('id-ID');
+ document.getElementById('parts').textContent='0';
+ document.getElementById('log').textContent=items.length?'Berhasil membaca '+items.length.toLocaleString('id-ID')+' Device ID/record. Format terdeteksi otomatis.':'Tidak menemukan Device ID yang valid.';
+ buildDistribution();document.getElementById('zip').disabled=true;
+};
+document.getElementById('split').onclick=()=>{
+ if(!items.length)return alert('Upload TXT terlebih dahulu.');
+ let n=Number(document.getElementById('size').value);
+ if(!Number.isInteger(n)||n<1||n>100000)return alert('Jumlah per file harus 1 sampai 100000.');
+ let a=items.slice();if(document.getElementById('shuffle').checked)shuffle(a);
+ outputs=[];const mode=document.getElementById('mode').value;
+ for(let i=0;i<a.length;i+=n){
+   const c=a.slice(i,i+n);
+   const data=mode==='full'?c.map(x=>x.raw.trimEnd()).join('\n\n')+'\n':c.map(x=>x.id).join('\n')+'\n';
+   outputs.push({name:'split_devid_part'+String(outputs.length+1).padStart(2,'0')+'.txt',data:data,count:c.length});
+ }
+ document.getElementById('parts').textContent=outputs.length.toLocaleString('id-ID');
+ document.getElementById('log').textContent='Selesai! '+a.length.toLocaleString('id-ID')+' record/ID → '+outputs.length.toLocaleString('id-ID')+' file.';
+ render();document.getElementById('zip').disabled=false;
+};
+document.getElementById('copy').onclick=async()=>{if(!distText)return;try{await navigator.clipboard.writeText(distText);alert('Distribution TXT sudah dicopy.')}catch(e){alert('Copy gagal, gunakan SELECT ALL.')}}
+document.getElementById('select').onclick=()=>{const r=document.createRange();r.selectNodeContents(document.getElementById('txt'));const s=getSelection();s.removeAllRanges();s.addRange(r)}
+document.getElementById('zip').onclick=async()=>{
+ if(!outputs.length)return;
+ if(!window.JSZip){let s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=makeZip;s.onerror=()=>alert('ZIP library gagal dimuat.');document.head.appendChild(s)}
+ else makeZip();
+};
+async function makeZip(){
+ const z=new JSZip();outputs.forEach(o=>z.file(o.name,o.data));
+ const b=await z.generateAsync({type:'blob'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='danzz_split_devid.zip';a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+loadWebsiteFeatures();
+</script>
+</body>
+</html>
